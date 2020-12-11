@@ -1,0 +1,9 @@
+{
+    "token": "Very secret bot token",
+    "command_prefix": "Command Prefix",
+
+    "db": {
+        "password": "password",
+        "url": "kiki.babo.mongodb.net"
+    }
+}
