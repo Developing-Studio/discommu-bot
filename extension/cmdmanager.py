@@ -40,7 +40,7 @@ def gather_commands(
     for f in files:
         name = f.replace('/', '.').replace('.py', '')
         cmd = import_module(name).Command(bot)
-        cmd.__name__ = cmd.name
+        cmd.__cog_name__ = cmd.name
         bot.add_cog(cmd)
     return cmds
 
