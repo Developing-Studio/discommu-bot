@@ -43,4 +43,4 @@ class Event(BaseEvent):
             await ctx.send(embed = Embed(title = '없는 유저입니다', color = Color.red()))
         
         else:
-            await ctx.send(embed = Embed(title = 'ERRrOR가 발생했습니다', description = f'```\n{te.__name__}: {str(te)} ({repr(te)})\n```', color = Color.red()))
+            await ctx.send(embed = Embed(title = 'ERRrOR가 발생했습니다', description = f'```py\n{repr(e)}\n```', color = Color.red()))
