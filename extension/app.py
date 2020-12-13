@@ -1,4 +1,4 @@
-from discord import Status
+from discord import Status, Embed, Color
 from discord.ext.commands import Bot
 
 from discordex.utils.node import File
@@ -34,3 +34,15 @@ class Discommu(Bot):
                 presence = _presence() if callable(_presence) else _presence
                 await self.change_presence(status=status, activity=presence, **kwargs)
                 await sleep(wait)
+
+    async def check_registered(self, ctx):
+        if not len(list(self.userCollection.find({'discordID': str(ctx.author.id)}))):
+            await ctx.send(embed = Embed(title = '가입이 안되있습니다', color = Color.red()))
+            return False
+        return True
+
+    async def check_owner(self, ctx):
+        if str(ctx.author.id) not in self.config.owners:
+            await ctx.send(embed = Embed(title = '오너가 아닙니다', color = Color.red()))
+            return False
+        return True

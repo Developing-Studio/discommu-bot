@@ -15,7 +15,9 @@ class Command(BaseCommand):
 
     def __init__(self, bot):
         super().__init__(bot)
-        map(lambda cmd: cmd.add_check(lambda ctx: self.bot.is_owner(ctx.author)), self.get_commands())
+
+        for cmd in self.get_commands():
+            cmd.add_check(self.bot.check_owner)
 
     @command(name = 'eval', help = '코드를 실행합니다', usage = 'eval [코드]')
     async def eval(self, ctx, *, code: str = None):

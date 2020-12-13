@@ -6,7 +6,8 @@ from discord.errors import (
 from discord.ext.commands.errors import (
     CommandNotFound, BotMissingPermissions, NoPrivateMessage,
     UserNotFound, MissingPermissions, BadArgument,
-    MissingRequiredArgument, ConversionError, NotOwner
+    MissingRequiredArgument, ConversionError, NotOwner,
+    CheckFailure
 )
 
 from extension import BaseEvent
@@ -17,6 +18,9 @@ class Event(BaseEvent):
         if isinstance(e, CommandNotFound):
             cmd = ctx.message.content[len(self.bot.config.command_prefix): ctx.message.content.index(' ') if ' ' in ctx.message.content else len(ctx.message.content)]
             await ctx.send(embed = Embed(title = f'{cmd} 명령어를 찾을수 없습니다', color = Color.red()))
+
+        elif isinstance(e, CheckFailure):
+            return
 
         elif isinstance(e, NotOwner):
             await ctx.send(embed = Embed(title = '오너가 아닙니다', color = Color.red()))
