@@ -5,6 +5,7 @@ from discordex.utils.node import File
 
 from asyncio import sleep
 from pymongo import MongoClient
+from re import compile
 
 from .cmdmanager import gather_events, gather_commands
 
@@ -46,3 +47,9 @@ class Discommu(Bot):
             await ctx.send(embed = Embed(title = '오너가 아닙니다', color = Color.red()))
             return False
         return True
+
+    def format_post(self, string: str):
+        url_compiled = compile(r'!\[.+\]\((?P<url>.+)\)')
+        for i in url_compiled.finditer(string):
+            string = string.replace(i.group(), f'[사진]({i.group("url")})')
+        return string

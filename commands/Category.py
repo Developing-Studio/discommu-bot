@@ -108,6 +108,9 @@ class Command(BaseCommand):
             return
 
         desc = msg.content
+        if len(desc) < 10 or len(desc) > 1000:
+            await ctx.send(embed = Embed(title = '설명 범위', description = '설명은 10글자 이상 1000글자 이하여야 합니다', color = Color.red()))
+            return
 
         msg = await ctx.send(embed = Embed(title = '카테고리 수정', description = f'정말 카테고리 `{name}`의 설명을 `{desc}`로 수정하겠습니까?', color = Color.orange()))
 
