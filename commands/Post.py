@@ -200,7 +200,18 @@ class Command(BaseCommand):
             title = '글 목록'
             no_description = '글이 없습니다'
         else:
-            postlist = list(self.bot.postCollection.find({'title': {'$regex': f'.*{query}.*'}}))
+            postlist = []
+            _idlist = []
+
+            _postlist = list(self.bot.postCollection.find({'title': {'$regex': f'.*{query}.*'}}))
+            _postlist.extend(list(self.bot.postCollection.find({'content': {'$regex': f'.*{query}.*'}})))
+
+            for data in _postlist:
+                if data['_id'] in _idlist:
+                    continue
+                _idlist.append(data['_id'])
+                postlist.append(data)
+
             title = f'"{query}" 검색 결과'
             no_description = '검색 결과가 없습니다'
 
