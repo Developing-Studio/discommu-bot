@@ -1,4 +1,4 @@
-from discord import Status, Embed, Color
+from discord import Status, Embed, Color, Intents
 from discord.ext.commands import Bot
 
 from discordex.utils.node import File
@@ -18,7 +18,7 @@ class Discommu(Bot):
         self.postCollection = self.db['posts']
         self.categoryCollection = self.db['categories']
 
-        super().__init__(self.config.command_prefix, **kwargs)
+        super().__init__(self.config.command_prefix, intents = Intents.all(), **kwargs)
         self.remove_command('help')
 
         gather_events(self)

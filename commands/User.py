@@ -1,4 +1,4 @@
-from discord import Embed, Color
+from discord import Embed, Color, Member
 from discord.ext.commands import command
 
 from asyncio import TimeoutError
@@ -48,3 +48,63 @@ class Command(BaseCommand):
 
         self.bot.userCollection.remove({'discordID': str(ctx.author.id)})
         await msg.edit(embed = Embed(title = '탈퇴를 했습니다', color = Color.green()))
+
+    @command(name = '유저정보', usage = '유저정보 [유저]', aliases = ['정보', 'info'], help = '유저의 정보를 보여줍니다')
+    async def user_info(self, ctx, user: Member = None):
+        if not len(list(self.bot.userCollection.find({'discordID': str(ctx.author.id)}))):
+            await ctx.send(embed = Embed(title = '가입이 안되있습니다', color = Color.red()))
+            return
+
+        if not user:
+            user = ctx.author
+
+        user_db = self.bot.userCollection.find_one({'discordID': str(user.id)})
+        if not user_db:
+            await ctx.send(embed = Embed(title = '가입이 되지 않은 유저입니다', color = Color.red()))
+            return
+
+        embed = Embed(
+            title = f'{user.name}님 정보',
+            color = Color.green()
+        )
+
+        following = user_db["following"]
+        embed.add_field(name = '팔로우중', value = f'{", ".join(map(lambda u: u.mention, map(lambda id: self.bot.get_user(int(id)), following[:2] if len(following) >= 2 else following)))} ({len(following)}명)')
+
+        followers = len(list(filter(lambda u: str(user.id) in u["following"], self.bot.userCollection.find())))
+        embed.add_field(name = '팔로워', value = f'{followers}명')
+
+        hearts = len(list(filter(lambda u: str(user.id) in u["hearts"], self.bot.postCollection.find())))
+        embed.add_field(name = '하트', value = f'{hearts}개')
+
+        posts = len(list(self.bot.postCollection.find({'authorID': str(user.id)})))
+        embed.add_field(name = '작성 글', value = f'{posts}개')
+
+        await ctx.send(embed = embed)
+
+    @command(name = '팔로우', usage = '팔로우 [유저]', aliases = ['follow', '팔로우취소'], help = '유저를 팔로우합니다')
+    async def follow(self, ctx, user: Member):
+        if not len(list(self.bot.userCollection.find({'discordID': str(ctx.author.id)}))):
+            await ctx.send(embed = Embed(title = '가입이 안되있습니다', color = Color.red()))
+            return
+
+        if not user:
+            await ctx.send(embed = Embed(title = '유저를 맨션해주세요', color = Color.red()))
+            return
+
+        if not self.bot.userCollection.find_one({'discordID': str(user.id)}):
+            await ctx.send(embed = Embed(title = '가입이 되지 않은 유저입니다', color = Color.red()))
+            return
+
+        if user == ctx.author:
+            await ctx.send(embed = Embed(title = '나 자신은 영원한 인생의 친구입니다(라고 쓰라고 디켑님이 시킴)', color = Color.green()))
+            return
+
+        user_db = self.bot.userCollection.find_one({'discordID': str(ctx.author.id)})
+        if str(user.id) in user_db["following"]:
+            user_db['following'].remove(str(user.id))
+            self.bot.userCollection.update({'discordID': str(ctx.author.id)}, {'$set': {'following': user_db["following"]}})
+            await ctx.send(embed = Embed(title = '팔로우 취소를 했습니다', color = Color.green()))
+        else:
+            self.bot.userCollection.update({'discordID': str(ctx.author.id)}, {'$set': {'following': user_db["following"] + [str(user.id)]}})
+            await ctx.send(embed = Embed(title = '팔로우를 했습니다', color = Color.green()))

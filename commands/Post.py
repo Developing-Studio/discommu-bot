@@ -2,7 +2,7 @@ from discord import Embed, Color
 from discord.ext.commands import command, group, MissingRequiredArgument
 
 from os.path import splitext
-from asyncio import TimeoutError
+from asyncio import TimeoutError, gather
 from EZPaginator import Paginator
 from re import sub
 
@@ -29,6 +29,11 @@ class Command(BaseCommand):
     async def post(self, ctx):
         if not ctx.invoked_subcommand:
             await self.list_post(ctx)
+
+    @group(name = '댓글', aliases = ['comment'], help = '댓글 명령어 그룹입니다')
+    async def comment(self, ctx):
+        if not ctx.invoked_subcommand:
+            return
 
     @post.command(name = '작성', usage = '작성 [제목]', aliases = ['write'], help = '글을 작성합니다')
     async def add_post(self, ctx, *, title: str):
@@ -78,7 +83,7 @@ class Command(BaseCommand):
         await msg.add_reaction('❌')
 
         try:
-            reaction, _ = await self.bot.wait_for('reaction_add', check = (lambda r, u: (str(r.emoji) in ('⭕', '❌')) and (r.message.channel == ctx.channel) and (u == ctx.author)), timeout = 30)
+            reaction, _ = await self.bot.wait_for('reaction_add', check = (lambda r, u: (str(r.emoji) in ('⭕', '❌')) and (msg == r.message) and (u == ctx.author)), timeout = 30)
         except TimeoutError:
             await msg.edit(embed = Embed(title = '글 작성을 취소했습니다', color = Color.green()))
             return
@@ -98,6 +103,12 @@ class Command(BaseCommand):
         })
         await msg.edit(embed = Embed(title = '글을 작성했습니다', color = Color.green()))
 
+        for u in map(lambda u: self.bot.get_user(int(u["discordID"])), list(filter(lambda u: str(ctx.author.id) in u["following"], self.bot.userCollection.find()))):
+            try:
+                await u.send(embed = Embed(title = f'{ctx.author}님이 글을 쓰셨습니다 (제목: {title})', color = Color.green()))
+            except:
+                continue
+
     @post.command(name = '삭제', usage = '삭제 [제목]', aliases = ['del', 'delete', 'remove'], help = '글을 삭제합니다')
     async def del_post(self, ctx, *, title: str):
         if not len(list(self.bot.postCollection.find({'title': title}))):
@@ -115,7 +126,7 @@ class Command(BaseCommand):
         await msg.add_reaction('❌')
 
         try:
-            reaction, _ = await self.bot.wait_for('reaction_add', check = (lambda r, u: (str(r.emoji) in ('⭕', '❌')) and (r.message.channel == ctx.channel) and (u == ctx.author)), timeout = 30)
+            reaction, _ = await self.bot.wait_for('reaction_add', check = (lambda r, u: (str(r.emoji) in ('⭕', '❌')) and (msg == r.message) and (u == ctx.author)), timeout = 30)
         except TimeoutError:
             await msg.edit(embed = Embed(title = '글 삭제를 취소했습니다', color = Color.green()))
             return
@@ -129,6 +140,12 @@ class Command(BaseCommand):
             'title': title
         })
         await msg.edit(embed = Embed(title = '글을 삭제했습니다', color = Color.green()))
+
+        for u in map(lambda u: self.bot.get_user(int(u["discordID"])), list(filter(lambda u: str(ctx.author.id) in u["following"], self.bot.userCollection.find()))):
+            try:
+                await u.send(embed = Embed(title = f'{ctx.author}님이 글을 삭제하셨셨습니다 (제목: {title})', color = Color.green()))
+            except:
+                continue
 
     @post.command(name = '수정', usage = '수정 [제목]', aliases = ['edit', 'update'], help = '글 내용을 수정합니다')
     async def edit_post(self, ctx, *, title: str):
@@ -160,7 +177,7 @@ class Command(BaseCommand):
         await msg.add_reaction('❌')
 
         try:
-            reaction, _ = await self.bot.wait_for('reaction_add', check = (lambda r, u: (str(r.emoji) in ('⭕', '❌')) and (r.message.channel == ctx.channel) and (u == ctx.author)), timeout = 30)
+            reaction, _ = await self.bot.wait_for('reaction_add', check = (lambda r, u: (str(r.emoji) in ('⭕', '❌')) and (r.message == msg) and (u == ctx.author)), timeout = 30)
         except TimeoutError:
             await msg.edit(embed = Embed(title = '글 수정을 취소했습니다', color = Color.green()))
             return
@@ -180,18 +197,115 @@ class Command(BaseCommand):
         })
         await msg.edit(embed = Embed(title = '글 내용을 수정했습니다', color = Color.green()))
 
-    @post.command(name = '보기', usage = '보기 [제목]', help = '글을 보여줍니다')
+        for u in map(lambda u: self.bot.get_user(int(u["discordID"])), list(filter(lambda u: str(ctx.author.id) in u["following"], self.bot.userCollection.find()))):
+            try:
+                await u.send(embed = Embed(title = f'{ctx.author}님이 글을 수정하셨습니다 (제목: {title})', color = Color.green()))
+            except:
+                continue
+
+    @post.command(name = '보기', aliases = ['show'], usage = '보기 [제목]', help = '글을 보여줍니다')
     async def info_post(self, ctx, *, title: str):
         if not len(list(self.bot.postCollection.find({'title': title}))):
             await ctx.send(embed = Embed(title = '그런 제목을 가진 글이 없습니다', color = Color.red()))
             return
 
         post = self.bot.postCollection.find_one({'title': title})
-        await ctx.send(embed = Embed(
+        msg = await ctx.send(embed = Embed(
             title = title,
             description = f'{self.bot.format_post(post["content"])}\n\n**작성자:** {self.bot.get_user(int(post["authorID"]))}\n**카테고리:** `{post["category"]}`\n**태그:** {"**,** ".join([f"`{tag}`" for tag in post["tag"]])}\n\n:heart: `{len(post["hearts"])}`\n:speech_balloon: `{len(post["comments"])}`',
             color = Color.green()
         ))
+
+        async def change_message():
+            post = self.bot.postCollection.find_one({'title': title})
+            await msg.edit(embed = Embed(
+                title = title,
+                description = f'{self.bot.format_post(post["content"])}\n\n**작성자:** {self.bot.get_user(int(post["authorID"]))}\n**카테고리:** `{post["category"]}`\n**태그:** {"**,** ".join([f"`{tag}`" for tag in post["tag"]])}\n\n:heart: `{len(post["hearts"])}`\n:speech_balloon: `{len(post["comments"])}`',
+                color = Color.green()
+            ))
+
+        hearted = str(ctx.author.id) in post['hearts']
+        await msg.add_reaction('❤' if not hearted else '💔')
+        await msg.add_reaction('💬')
+
+        if str(ctx.author.id) == post['authorID']:
+            do = {
+                '✏': self.edit_post,
+                '🗑': self.del_post
+            }
+
+            for emoji in do:
+                await msg.add_reaction(emoji)
+        else:
+            do = {}
+
+        while True:
+            try:
+                r = str(
+                    list(
+                        await self.bot.wait_for(
+                            'reaction_add',
+                            timeout = 600,
+                            check = lambda r, u: (u == ctx.author) and (str(r.emoji) in (['💬', '❤' if not hearted else '💔'] + list(do.keys()))) and (r.message == msg)
+                        )
+                    )[0].emoji
+                )
+            except Exception:
+                try:
+                    await gather(
+                        msg.remove_reaction('❤' if not hearted else '💔', ctx.guild.me),
+                        msg.remove_reaction('💬', ctx.guild.me)
+                    )
+                except:
+                    break
+                break
+
+            if r == ('❤' if not hearted else '💔'):
+                if hearted:
+                    post['hearts'].remove(str(ctx.author.id))
+                    try:
+                        await gather(
+                            msg.remove_reaction('💔', ctx.guild.me),
+                            msg.add_reaction('❤')
+                        )
+                    except:
+                        break
+
+                    for u in map(lambda u: self.bot.get_user(int(u["discordID"])), list(filter(lambda u: str(ctx.author.id) in u["following"], self.bot.userCollection.find()))):
+                        try:
+                            await u.send(embed = Embed(title = f'{ctx.author}님이 하트를 취소하셨습니다 (제목: {title})', color = Color.green()))
+                        except:
+                            continue
+
+                else:
+                    post['hearts'].append(str(ctx.author.id))
+                    try:
+                        await gather(
+                            msg.remove_reaction('❤', ctx.guild.me),
+                            msg.add_reaction('💔')
+                        )
+                    except:
+                        break
+
+                    for u in map(lambda u: self.bot.get_user(int(u["discordID"])), list(filter(lambda u: str(ctx.author.id) in u["following"], self.bot.userCollection.find()))):
+                        try:
+                            await u.send(embed = Embed(title = f'{ctx.author}님이 하트를 누르셨습니다 (제목: {title})', color = Color.green()))
+                        except:
+                            continue
+
+                self.bot.postCollection.update({'title': title}, {'$set': {'hearts': post['hearts']}})
+                hearted = not hearted
+
+            elif r == '💬':
+                await self.show_comment(ctx, title = title)
+
+            elif do:
+                await do[r](ctx, title = title)
+                if r == '🗑':
+                    await msg.delete()
+                    return
+
+            await change_message()
 
     @post.command(name = '검색', aliases = ['search'], help = '글을 검색합니다(검색어가 없으면 모두 다 표시)')
     async def list_post(self, ctx, *, query: str = None):
@@ -199,6 +313,7 @@ class Command(BaseCommand):
             postlist = list(self.bot.postCollection.find())
             title = '글 목록'
             no_description = '글이 없습니다'
+
         else:
             postlist = []
             _idlist = []
@@ -233,3 +348,214 @@ class Command(BaseCommand):
             await Paginator(self.bot, msg, embeds = embeds).start()
         else:
             await ctx.send(embed = Embed(title = title, description = no_description, color = Color.green()))
+
+    @comment.command(name = '작성', aliases = ['new', 'write'], usage = '작성 [제목]', help = '댓글을 작성합니다')
+    async def write_comment(self, ctx, *, title: str):
+        if not len(list(self.bot.postCollection.find({'title': title}))):
+            await ctx.send(embed = Embed(title = '그런 제목을 가진 글이 없습니다', color = Color.red()))
+            return
+
+        commentlist = self.bot.postCollection.find_one({'title': title})['comments']
+
+        msg = await ctx.send(embed = Embed(title = '댓글 작성', description = '댓글의 내용을 입력해주세요 (5분동안 메시지가 없으면 취소됨)', color = Color.orange()))
+
+        try:
+            comment = (await self.bot.wait_for('message', check = (lambda m: (m.channel == ctx.channel) and (m.author == ctx.author)), timeout = 300)).content
+        except TimeoutError:
+            await msg.edit(embed = Embed(title = '댓글 작성을 취소했습니다', color = Color.green()))
+            return
+
+        if len(comment) > 200:
+            await ctx.send(embed = Embed(title = '댓글 작성', description = '댓글의 길이는 200자를 넘으면 안됩니다', color = Color.red()))
+            return
+
+        msg = msg = await ctx.send(embed = Embed(title = '댓글 작성', description = '정말 댓글을 작성할까요?', color = Color.orange()))
+        await msg.add_reaction('⭕')
+        await msg.add_reaction('❌')
+
+        try:
+            reaction, _ = await self.bot.wait_for('reaction_add', check = (lambda r, u: (str(r.emoji) in ('⭕', '❌')) and (r.message == msg) and (u == ctx.author)), timeout = 30)
+        except TimeoutError:
+            await msg.edit(embed = Embed(title = '댓글 작성을 취소했습니다', color = Color.green()))
+            return
+
+        if str(reaction) == '❌':
+            await msg.edit(embed = Embed(title = '댓글 작성을 취소했습니다', color = Color.green()))
+            return
+
+        commentlist.append({'authorID': str(ctx.author.id), 'comment': comment})
+        self.bot.postCollection.update({'title': title}, {'$set': {'comments': commentlist}})
+        await msg.edit(embed = Embed(title = '댓글을 작성했습니다', color = Color.green()))
+        return True
+
+    @comment.command(name = '삭제', aliases = ['delete', 'remove'], usage = '삭제 [댓글아이디] [제목]', help = '댓글을 삭제합니다')
+    async def delete_comment(self, ctx, comid: int, *, title: str):
+        if not len(list(self.bot.postCollection.find({'title': title}))):
+            await ctx.send(embed = Embed(title = '그런 제목을 가진 글이 없습니다', color = Color.red()))
+            return
+
+        commentlist = self.bot.postCollection.find_one({'title': title})['comments']
+        comid -= 1
+
+        if comid >= len(commentlist) or comid < 0:
+            await ctx.send(embed = Embed(title = '댓글 아이디가 틀립니다', color = Color.red()))
+            return
+        comment = commentlist[comid]
+
+        if comment["authorID"] != str(ctx.author.id):
+            await ctx.send(embed = Embed(title = '자기가 작성한 댓글만 삭제 가능합니다', color = Color.red()))
+            return
+
+        msg = await ctx.send(embed = Embed(title = '댓글 삭제', description = f'`{comment["comment"]}` 이 댓글을 삭제할까요?', color = Color.orange()))
+        await msg.add_reaction('⭕')
+        await msg.add_reaction('❌')
+
+        try:
+            reaction, _ = await self.bot.wait_for('reaction_add', check = (lambda r, u: (str(r.emoji) in ('⭕', '❌')) and (r.message == msg) and (u == ctx.author)), timeout = 30)
+        except TimeoutError:
+            await msg.edit(embed = Embed(title = '댓글 삭제를 취소했습니다', color = Color.green()))
+            return
+
+        if str(reaction) == '❌':
+            await msg.edit(embed = Embed(title = '댓글 삭제를 취소했습니다', color = Color.green()))
+            return
+
+        commentlist.pop(comid)
+        self.bot.postCollection.update({'title': title}, {'$set': {'comments': commentlist}})
+        await msg.edit(embed = Embed(title = '댓글을 삭제했습니다', color = Color.green()))
+        return True
+
+    @comment.command(name = '수정', aliases = ['edit'], usage = '수정 [댓글아이디] [제목]', help = '댓글을 수정합니다')
+    async def edit_comment(self, ctx, comid: int, *, title: str):
+        if not len(list(self.bot.postCollection.find({'title': title}))):
+            await ctx.send(embed = Embed(title = '그런 제목을 가진 글이 없습니다', color = Color.red()))
+            return
+
+        commentlist = self.bot.postCollection.find_one({'title': title})['comments']
+        comid -= 1
+
+        if comid >= len(commentlist) or comid < 0:
+            await ctx.send(embed = Embed(title = '댓글 아이디가 틀립니다', color = Color.red()))
+            return
+        comment = commentlist[comid]
+
+        if comment["authorID"] != str(ctx.author.id):
+            await ctx.send(embed = Embed(title = '자기가 작성한 댓글만 삭제 가능합니다', color = Color.red()))
+            return
+
+        msg = await ctx.send(embed = Embed(title = '댓글 수정', description = '댓글 내용을 무엇으로 수정할까요?', color = Color.orange()))
+        try:
+            new_comment = (await self.bot.wait_for('message', check = (lambda m: (m.channel == ctx.channel) and (m.author == ctx.author)), timeout = 600)).content
+        except TimeoutError:
+            await msg.edit(embed = Embed(title = '댓글 수정을 취소했습니다', color = Color.green()))
+            return
+
+        msg = await ctx.send(embed = Embed(title = '댓글 수정', description = f'`{comment["comment"]}` 이 댓글을 `{new_comment}`로 바꿀까요?', color = Color.orange()))
+        await msg.add_reaction('⭕')
+        await msg.add_reaction('❌')
+
+        try:
+            reaction, _ = await self.bot.wait_for('reaction_add', check = (lambda r, u: (str(r.emoji) in ('⭕', '❌')) and (r.message == msg) and (u == ctx.author)), timeout = 30)
+        except TimeoutError:
+            await msg.edit(embed = Embed(title = '댓글 삭제를 취소했습니다', color = Color.green()))
+            return
+
+        if str(reaction) == '❌':
+            await msg.edit(embed = Embed(title = '댓글 삭제를 취소했습니다', color = Color.green()))
+            return
+
+        commentlist[comid]['comment'] = new_comment
+        self.bot.postCollection.update({'title': title}, {'$set': {'comments': commentlist}})
+        await msg.edit(embed = Embed(title = '댓글을 수정했습니다', color = Color.green()))
+        return True
+
+    @comment.command(name = '보기', aliases = ['show'], usage = '보기 [제목]', help = '댓글 리스트를 보여줍니다')
+    async def show_comment(self, ctx, *, title: str):
+        if not len(list(self.bot.postCollection.find({'title': title}))):
+            await ctx.send(embed = Embed(title = '그런 제목을 가진 글이 없습니다', color = Color.red()))
+            return
+
+        commentlist = self.bot.postCollection.find_one({'title': title})['comments']
+        if not commentlist:
+            num = -1
+            msg = await ctx.send(embed = Embed(title = '이 글에 댓글이 없습니다', color = Color.green()))
+        else:
+            num = 0
+            msg = await ctx.send(embed = Embed(title = f'#1 {commentlist[0]["comment"]}', description = f'by `{self.bot.get_user(int(commentlist[0]["authorID"]))}`', color = Color.green()))
+
+        while True:
+            awaitreaction = []
+            commentlist = self.bot.postCollection.find_one({'title': title})['comments']
+
+            if (num < -1) or (num >= len(commentlist)):
+                num = 0
+
+            if not commentlist:
+                num = -1
+                await msg.edit(embed = Embed(title = '이 글에 댓글이 없습니다', color = Color.green()))
+            else:
+                await msg.edit(embed = Embed(title = f'#{num + 1} {commentlist[num]["comment"]}', description = f'by `{self.bot.get_user(int(commentlist[num]["authorID"])) or "익명의 유저"}`', color = Color.green()))
+
+            awaitreaction.extend(['◀', '▶', '➕'])
+
+            if (num >= 0) and (commentlist[num]['authorID'] == str(ctx.author.id)):
+                awaitreaction.extend(['✏', '🗑'])
+
+            for r in awaitreaction:
+                await msg.add_reaction(r)
+
+            try:
+                r = str(
+                    list(
+                        await self.bot.wait_for(
+                            'reaction_add',
+                            timeout = 600,
+                            check = lambda r, u: (u == ctx.author) and (str(r.emoji) in awaitreaction) and (r.message == msg)
+                        )
+                    )[0].emoji
+                )
+            except Exception:
+                try:
+                    await msg.delete()
+                except:
+                    break
+                break
+
+            if r == '◀':
+                if num == -1:
+                    pass
+                elif num <= 0:
+                    num = len(commentlist) - 1
+                else:
+                    num -= 1
+
+            elif r == '▶':
+                if num == -1:
+                    pass
+                elif num >= len(commentlist) - 1:
+                    if not commentlist:
+                        num = -1
+                    else:
+                        num = 0
+                num += 1
+
+            elif r == '➕':
+                res = await self.write_comment(ctx, title = title)
+                if res and (num == -1):
+                    num = 0
+
+            elif r == '✏':
+                await self.edit_comment(ctx, comid = num + 1, title = title)
+
+            elif r == '🗑':
+                await self.delete_comment(ctx, comid = num + 1, title = title)
+
+            corlist = []
+            for r in awaitreaction:
+                if r in ['✏', '🗑']:
+                    corlist.append(r)
+
+            try:
+                await gather(*[msg.remove_reaction(r, ctx.guild.me) for r in corlist])
+            except Exception:
+                pass
